@@ -82,8 +82,8 @@ def main():
         prevTime = 0
         option = st.selectbox("Choose a camera", camera_options)
 
-        vid = cv2.VideoCapture(int(option.split(" ")[-1]))
-        #vid = cv2.VideoCapture(1)
+        #vid = cv2.VideoCapture(int(option.split(" ")[-1]))
+        vid = cv2.VideoCapture(0)
         drawing_spec = mp_drawing.DrawingSpec(thickness=2, circle_radius=2)
         with mp_holistic.Holistic(
                 min_detection_confidence=0.5,
