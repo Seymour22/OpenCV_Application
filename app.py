@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 import mediapipe as mp
 import streamlit as st
 from tensorflow import keras
