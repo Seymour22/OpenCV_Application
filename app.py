@@ -1,11 +1,6 @@
 import cv2
-import numpy as np
-import os
-import time
 import mediapipe as mp
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, RTCConfiguration, VideoProcessorBase, WebRtcMode
 import streamlit as st
-
 from tensorflow import keras
 
 
@@ -17,87 +12,7 @@ mp_drawing = mp.solutions.drawing_utils  # Drawing utilities
 
 mp_face_mesh = mp.solutions.face_mesh
 
-class VideoTransformer(VideoTransformerBase):
-    def __init__(self):
-        self.i = 0
-
-    def transform(self, frame):
-        frame = frame.to_ndarray(format="bgr24")
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        sequence = []
-        sentence = []
-        predictions = []
-        threshold = 0.5
-        prevTime = 0
-
-        i =self.i+1
-        model = keras.models.load_model('action.h5')
-        with mp_holistic.Holistic(
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5) as holistic_mesh:
-
-            # Set mediapipe model
-
-                #ret, frame = vid.read()
-                # if not ret:
-                #     break
-
-                # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                # results = holistic_mesh.process(frame)
-                #
-                # frame.flags.writeable = True
-                # frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
-                frame, results = mediapipe_detection(frame, holistic_mesh)
-
-                draw_landmarks(frame, results)
-
-                keypoints = extract_keypoints(results)
-                sequence.append(keypoints)
-                sequence = sequence[-3:]
-
-                if len(sequence) == 3:
-                    res = model.predict(np.expand_dims(sequence, axis=0))[0]
-                    print(actions[np.argmax(res)])
-                    predictions.append(np.argmax(res))
-
-                    # 3. Viz logic
-                    if np.unique(predictions[-1:])[0] == np.argmax(res):
-                        if res[np.argmax(res)] > threshold:
-
-                            if len(sentence) > 0:
-                                if actions[np.argmax(res)] != sentence[-1]:
-                                    sentence.append(actions[np.argmax(res)])
-                            else:
-                                sentence.append(actions[np.argmax(res)])
-
-                    if len(sentence) > 5:
-                        sentence = sentence[-5:]
-
-                    # Viz probabilities
-                    image = prob_viz(res, actions, frame, colors)
-
-                cv2.rectangle(frame, (0, 0), (640, 40), (245, 117, 16), -1)
-                cv2.putText(frame, ' '.join(sentence), (3, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-
-                # mp_drawing.draw_landmarks(
-                #     image=frame,
-                #     landmark_list=results.face_landmarks,
-                #     connections=mp_holistic.FACEMESH_TESSELATION,
-                #     landmark_drawing_spec=drawing_spec,
-                #     connection_drawing_spec=drawing_spec)
-                currTime = time.time()
-                fps = 1 / (currTime - prevTime)
-                prevTime = currTime
-                #stframe.image(frame,channels = 'BGR',use_column_width=True)
-            # vid.release()
-            # cv2.destroyAllWindows()
-
-        return frame
-
-
+RTC_CONFIGURATION = RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]})
 
 
 
@@ -139,19 +54,12 @@ def extract_keypoints(results):
     return np.concatenate([pose, face, lh, rh])
 
 def main():
-    actions = np.array(['Left', 'Right'])
-
-    mp_holistic = mp.solutions.holistic  # Holistic model
-    mp_drawing = mp.solutions.drawing_utils  # Drawing utilities
-
-    mp_face_mesh = mp.solutions.face_mesh
     st.title("Welcome! This application can detect if a face turns left or right.")
     st.text('Please turn your head left or right for me to detect.')
-    rtc_configuration = RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]})
 
 
 
-
+    model = keras.models.load_model('action.h5')
 
     # Create sidebar with options for user to choose
     option = st.selectbox("Choose an option", ("Webcam", "Upload video"))
@@ -161,32 +69,80 @@ def main():
 
     # Depending on user's option, show webcam or file uploader
     if option == "Webcam":
-
+        sequence = []
+        sentence = []
+        predictions = []
+        threshold = 0.5
         camera_options = []
+        for i in range(5):
+            vid = cv2.VideoCapture(i)
+            if vid.isOpened():
+                camera_options.append(f"Camera {i}")
+            vid.release()
+        prevTime = 0
+        option = st.selectbox("Choose a camera", camera_options)
 
-        RTC_CONFIGURATION = RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]})
-        webrtc_streamer(key="example", video_transformer_factory=VideoTransformer)
-        #webrtc_ctx = webrtc_streamer(key="example", rtc_configuration=rtc_configuration, mode=WebRtcMode.SENDRECV,
-                                     #video_processor_factory=VideoTransformerBase)
-
-
-
-          # open cv2 capture object
-        #vid = cv2.VideoCapture(i)
-        # if vid.isOpened():
-        #     camera_options.append(f"Camera {i}")
-        # #vid.release()
-        # prevTime = 0
-        # option = st.selectbox("Choose a camera", camera_options)
-
-        #vid = cv2.VideoCapture(int(option.split(" ")[-1]))
+        vid = cv2.VideoCapture(int(option.split(" ")[-1]))
         #vid = cv2.VideoCapture(1)
+        drawing_spec = mp_drawing.DrawingSpec(thickness=2, circle_radius=2)
+        with mp_holistic.Holistic(
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5) as holistic_mesh:
 
+            # Set mediapipe model
+            i += 1
+            while vid.isOpened():
+                ret, frame = vid.read()
+                if not ret:
+                    break
 
-        # webrtc_ctx = webrtc_streamer(key="example", mode=WebRtcMode.SENDRECV, rtc_configuration=RTC_CONFIGURATION)
-        # vid = webrtc_ctx
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = holistic_mesh.process(frame)
 
+                frame.flags.writeable = True
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
+                draw_landmarks(frame, results)
+
+                keypoints = extract_keypoints(results)
+                sequence.append(keypoints)
+                sequence = sequence[-3:]
+
+                if len(sequence) == 3:
+                    res = model.predict(np.expand_dims(sequence, axis=0))[0]
+                    print(actions[np.argmax(res)])
+                    predictions.append(np.argmax(res))
+
+                    # 3. Viz logic
+                    if np.unique(predictions[-1:])[0] == np.argmax(res):
+                        if res[np.argmax(res)] > threshold:
+
+                            if len(sentence) > 0:
+                                if actions[np.argmax(res)] != sentence[-1]:
+                                    sentence.append(actions[np.argmax(res)])
+                            else:
+                                sentence.append(actions[np.argmax(res)])
+
+                    if len(sentence) > 5:
+                        sentence = sentence[-5:]
+
+                    # Viz probabilities
+                    image = prob_viz(res, actions, frame, colors)
+
+                cv2.rectangle(frame, (0, 0), (640, 40), (245, 117, 16), -1)
+                cv2.putText(frame, ' '.join(sentence), (3, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+                # mp_drawing.draw_landmarks(
+                #     image=frame,
+                #     landmark_list=results.face_landmarks,
+                #     connections=mp_holistic.FACEMESH_TESSELATION,
+                #     landmark_drawing_spec=drawing_spec,
+                #     connection_drawing_spec=drawing_spec)
+                currTime = time.time()
+                fps = 1 / (currTime - prevTime)
+                prevTime = currTime
+                stframe.image(frame,channels = 'BGR',use_column_width=True)
 
 
     else:
