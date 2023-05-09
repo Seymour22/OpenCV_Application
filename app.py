@@ -73,14 +73,14 @@ def main():
         sentence = []
         predictions = []
         threshold = 0.5
-        camera_options = []
-        for i in range(5):
-            vid = cv2.VideoCapture(i)
-            if vid.isOpened():
-                camera_options.append(f"Camera {i}")
-            vid.release()
+#         camera_options = []
+#         for i in range(5):
+#             vid = cv2.VideoCapture(i)
+#             if vid.isOpened():
+#                 camera_options.append(f"Camera {i}")
+#             vid.release()
         prevTime = 0
-        option = st.selectbox("Choose a camera", camera_options)
+        #option = st.selectbox("Choose a camera", camera_options)
 
         #vid = cv2.VideoCapture(int(option.split(" ")[-1]))
         vid = cv2.VideoCapture(0)
