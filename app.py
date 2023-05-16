@@ -6,6 +6,7 @@ from tensorflow import keras
 import tempfile
 import os
 from fastapi import FastAPI, UploadFile, File
+import uvicorn
 
 app = FastAPI()
 
