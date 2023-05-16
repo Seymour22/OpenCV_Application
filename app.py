@@ -4,6 +4,9 @@ import mediapipe as mp
 import streamlit as st
 from tensorflow import keras
 import tempfile
+from fastapi import FastAPI, UploadFile, File
+
+app = FastAPI()
 
 actions = np.array(['Left', 'Right'])
 colors = [(245, 117, 16), (117, 245, 16)]
@@ -107,38 +110,33 @@ def extract_keypoints(results):
     return np.concatenate([pose, face, lh, rh])
 
 
-def main():
-    st.title("Welcome! This application can detect if a face turns left or right.")
-    st.text('Please turn your head left or right for me to detect.')
+@app.post("/detect")
+async def detect(file: UploadFile = File(...)):
+    # Save the uploaded video file to a temporary location
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        temp_path = temp_file.name
+        temp_file.write(await file.read())
 
-    option = st.selectbox("Choose an option", ("Webcam", "Upload video"))
+    # Read the video file using OpenCV
+    vid = cv2.VideoCapture(temp_path)
+    sentence = detect_dir(vid)
+    vid.release()
 
-    # Depending on the user's option, show webcam or file uploader
-    if option == "Webcam":
-        camera_options = []
-        for i in range(5):
-            vid = cv2.VideoCapture(i)
-            if vid.isOpened():
-                camera_options.append(f"Camera {i}")
-            vid.release()
+    return {"sentence": sentence}
 
-        option = st.selectbox("Choose a camera", camera_options)
 
-        vid = cv2.VideoCapture(int(option.split(" ")[-1]))
-        detect_dir(vid)
-
-    else:
-        video_file = st.file_uploader("Upload a video file", type=["mp4", "avi"])
-        if video_file is not None:
-            # Save the uploaded video file to a temporary location
-            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                temp_path = temp_file.name
-                temp_file.write(video_file.read())
-
-            # Read the video file using OpenCV
-            vid = cv2.VideoCapture(temp_path)
-            detect_dir(vid)
+@app.get("/")
+def read_root():
+    return {"message": "Welcome! This application can detect if a face turns left or right."}
 
 
 if __name__ == "__main__":
-    main()
+    import os
+
+    # Retrieve the port from the environment variable
+    port = int(os.environ.get("PORT", 8000))
+
+    # Run the FastAPI application using uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=port, log_level="info")
+
+
