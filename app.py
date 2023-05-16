@@ -4,6 +4,7 @@ import mediapipe as mp
 import streamlit as st
 from tensorflow import keras
 import tempfile
+import os
 from fastapi import FastAPI, UploadFile, File
 
 app = FastAPI()
@@ -131,7 +132,6 @@ def read_root():
 
 
 if __name__ == "__main__":
-    import os
 
     # Retrieve the port from the environment variable
     port = int(os.environ.get("PORT", 8000))
