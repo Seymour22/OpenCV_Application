@@ -1,3 +1,4 @@
+apt
 python-multipart
 mediapipe
 opencv_contrib_python
