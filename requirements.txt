@@ -1,9 +1,6 @@
-uvicorn==0.15.0
-gunicorn
-python-multipart==0.0.5
-fastapi==0.68.1
-mediapipe==0.9.0.1
-opencv_contrib_python==4.7.0.72
-opencv_python==4.6.0.66
-streamlit==1.21.0
-tensorflow==2.9.1
+python-multipart
+mediapipe
+opencv_contrib_python
+opencv_python
+streamlit
+tensorflow
