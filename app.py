@@ -4,11 +4,7 @@ import mediapipe as mp
 import streamlit as st
 from tensorflow import keras
 import tempfile
-import os
-from fastapi import FastAPI, UploadFile, File
-import uvicorn
 
-app = FastAPI()
 
 actions = np.array(['Left', 'Right'])
 colors = [(245, 117, 16), (117, 245, 16)]
@@ -19,56 +15,6 @@ mp_drawing = mp.solutions.drawing_utils  # Drawing utilities
 
 
 
-def detect_dir(vid):
-    predictions = []
-    threshold = 0.5
-    stframe = st.empty()
-    model = keras.models.load_model('action.h5')
-
-    with mp_holistic.Holistic(
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5) as holistic_mesh:
-        sentence = []
-        sequence = []  # Initialize sequence
-        while vid.isOpened():
-            ret, frame = vid.read()
-            if not ret:
-                break
-
-            frame, results = mediapipe_detection(frame, holistic_mesh)
-
-            draw_landmarks(frame, results)
-
-            keypoints = extract_keypoints(results)
-            sequence.append(keypoints)
-            sequence = sequence[-3:]
-
-            if len(sequence) == 3:
-                res = model.predict(np.expand_dims(sequence, axis=0))[0]
-                print(actions[np.argmax(res)])
-                predictions.append(np.argmax(res))
-
-                # 3. Viz logic
-                if np.unique(predictions[-1:])[0] == np.argmax(res):
-                    if res[np.argmax(res)] > threshold:
-                        if len(sentence) > 0:
-                            if actions[np.argmax(res)] != sentence[-1]:
-                                sentence.append(actions[np.argmax(res)])
-                        else:
-                            sentence.append(actions[np.argmax(res)])
-
-                if len(sentence) > 5:
-                    sentence = sentence[-5:]
-
-                # Viz probabilities
-                frame = prob_viz(res, actions, frame, colors)
-
-            cv2.rectangle(frame, (0, 0), (640, 40), (245, 117, 16), -1)
-            cv2.putText(frame, ' '.join(sentence), (3, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-
-            stframe.image(frame, channels='BGR', use_column_width=True)
-
 
 def mediapipe_detection(image, model):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # COLOR CONVERSION BGR 2 RGB
@@ -77,7 +23,6 @@ def mediapipe_detection(image, model):
     image.flags.writeable = True  # Image is now writeable
     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)  # COLOR COVERSION RGB 2 BGR
     return image, results
-
 
 def draw_landmarks(image, results):
     mp_drawing.draw_landmarks(image, results.face_landmarks,
@@ -89,6 +34,7 @@ def draw_landmarks(image, results):
                               mp_holistic.HAND_CONNECTIONS)  # Draw right hand connections
 
 
+
 def prob_viz(res, actions, input_frame, colors):
     output_frame = input_frame.copy()
     for num, prob in enumerate(res):
@@ -98,46 +44,162 @@ def prob_viz(res, actions, input_frame, colors):
 
     return output_frame
 
-
 def extract_keypoints(results):
-    pose = np.array([[res.x, res.y, res.z, res.visibility] for res in
-                     results.pose_landmarks.landmark]).flatten() if results.pose_landmarks else np.zeros(33 * 4)
-    face = np.array([[res.x, res.y, res.z] for res in
-                     results.face_landmarks.landmark]).flatten() if results.face_landmarks else np.zeros(468 * 3)
-    lh = np.array([[res.x, res.y, res.z] for res in
-                   results.left_hand_landmarks.landmark]).flatten() if results.left_hand_landmarks else np.zeros(21 * 3)
-    rh = np.array([[res.x, res.y, res.z] for res in
-                   results.right_hand_landmarks.landmark]).flatten() if results.right_hand_landmarks else np.zeros(
-        21 * 3)
+    pose = np.array([[res.x, res.y, res.z, res.visibility] for res in results.pose_landmarks.landmark]).flatten() if results.pose_landmarks else np.zeros(33*4)
+    face = np.array([[res.x, res.y, res.z] for res in results.face_landmarks.landmark]).flatten() if results.face_landmarks else np.zeros(468*3)
+    lh = np.array([[res.x, res.y, res.z] for res in results.left_hand_landmarks.landmark]).flatten() if results.left_hand_landmarks else np.zeros(21*3)
+    rh = np.array([[res.x, res.y, res.z] for res in results.right_hand_landmarks.landmark]).flatten() if results.right_hand_landmarks else np.zeros(21*3)
     return np.concatenate([pose, face, lh, rh])
 
 
-@app.post("/detect")
-async def detect(file: UploadFile = File(...)):
-    # Save the uploaded video file to a temporary location
-    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-        temp_path = temp_file.name
-        temp_file.write(await file.read())
-
-    # Read the video file using OpenCV
-    vid = cv2.VideoCapture(temp_path)
-    sentence = detect_dir(vid)
-    vid.release()
-
-    return {"sentence": sentence}
+def main():
+    st.title("Welcome! This application can detect if a face turns left or right.")
+    st.text('Please turn your head left or right for me to detect.')
 
 
-@app.get("/")
-def read_root():
-    return {"message": "Welcome! This application can detect if a face turns left or right."}
+
+    model = keras.models.load_model('action.h5')
+
+    # Create sidebar with options for user to choose
+    option = st.selectbox("Choose an option", ("Webcam", "Upload video"))
+    fps = 0
+    i = 0
+    stframe = st.empty()
+
+    # Depending on user's option, show webcam or file uploader
+    if option == "Webcam":
+        sequence = []
+        sentence = []
+        predictions = []
+        threshold = 0.5
+        camera_options = []
+        for i in range(5):
+            vid = cv2.VideoCapture(i)
+            if vid.isOpened():
+                camera_options.append(f"Camera {i}")
+            vid.release()
+        prevTime = 0
+        option = st.selectbox("Choose a camera", camera_options)
+
+        vid = cv2.VideoCapture(int(option.split(" ")[-1]))
+
+        with mp_holistic.Holistic(
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5) as holistic_mesh:
+
+            # Set mediapipe model
+
+            while vid.isOpened():
+                ret, frame = vid.read()
+                if not ret:
+                    break
+
+
+                frame,results=mediapipe_detection(frame, holistic_mesh)
+
+                draw_landmarks(frame, results)
+
+                keypoints = extract_keypoints(results)
+                sequence.append(keypoints)
+                sequence = sequence[-3:]
+
+                if len(sequence) == 3:
+                    res = model.predict(np.expand_dims(sequence, axis=0))[0]
+                    print(actions[np.argmax(res)])
+                    predictions.append(np.argmax(res))
+
+                    # 3. Viz logic
+                    if np.unique(predictions[-1:])[0] == np.argmax(res):
+                        if res[np.argmax(res)] > threshold:
+
+                            if len(sentence) > 0:
+                                if actions[np.argmax(res)] != sentence[-1]:
+                                    sentence.append(actions[np.argmax(res)])
+                            else:
+                                sentence.append(actions[np.argmax(res)])
+
+                    if len(sentence) > 5:
+                        sentence = sentence[-5:]
+
+                    # Viz probabilities
+                    frame = prob_viz(res, actions, frame, colors)
+
+                cv2.rectangle(frame, (0, 0), (640, 40), (245, 117, 16), -1)
+                cv2.putText(frame, ' '.join(sentence), (3, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+
+                stframe.image(frame,channels = 'BGR',use_column_width=True)
+
+
+    else:
+
+        video_file = st.file_uploader("Upload a video file", type=["mp4", "avi"])
+        if video_file is not None:
+            # Save the uploaded video file to a temporary location
+            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                temp_path = temp_file.name
+                temp_file.write(video_file.read())
+
+            # Read the video file using OpenCV
+            vid = cv2.VideoCapture(temp_path)
+            # Set mediapipe model
+            sequence = []
+            sentence = []
+            predictions = []
+            threshold = 0.5
+
+
+
+            with mp_holistic.Holistic(
+                    min_detection_confidence=0.5,
+                    min_tracking_confidence=0.5) as holistic_mesh:
+
+                # Set mediapipe model
+
+                while vid.isOpened():
+                    ret, frame = vid.read()
+                    if not ret:
+                        break
+
+                    frame, results = mediapipe_detection(frame, holistic_mesh)
+
+                    draw_landmarks(frame, results)
+
+                    keypoints = extract_keypoints(results)
+                    sequence.append(keypoints)
+                    sequence = sequence[-3:]
+
+                    if len(sequence) == 3:
+                        res = model.predict(np.expand_dims(sequence, axis=0))[0]
+                        print(actions[np.argmax(res)])
+                        predictions.append(np.argmax(res))
+
+                        # 3. Viz logic
+                        if np.unique(predictions[-1:])[0] == np.argmax(res):
+                            if res[np.argmax(res)] > threshold:
+
+                                if len(sentence) > 0:
+                                    if actions[np.argmax(res)] != sentence[-1]:
+                                        sentence.append(actions[np.argmax(res)])
+                                else:
+                                    sentence.append(actions[np.argmax(res)])
+
+                        if len(sentence) > 5:
+                            sentence = sentence[-5:]
+
+                        # Viz probabilities
+                        frame = prob_viz(res, actions, frame, colors)
+
+                    cv2.rectangle(frame, (0, 0), (640, 40), (245, 117, 16), -1)
+                    cv2.putText(frame, ' '.join(sentence), (3, 30),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+                    stframe.image(frame, channels='BGR', use_column_width=True)
 
 
 if __name__ == "__main__":
+    main()
 
-    # Retrieve the port from the environment variable
-    port = int(os.environ.get("PORT", 8000))
-
-    # Run the FastAPI application using uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=port, log_level="info")
 
 
