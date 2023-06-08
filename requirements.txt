@@ -1,4 +1,3 @@
-libgl1
 python-multipart
 mediapipe
 opencv_contrib_python
