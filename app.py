@@ -1,4 +1,4 @@
-#Model training was done [here](https://github.com/Seymour22/Neural-networks/blob/main/Project%201%20Action%20detection%20using%20OpenCV.ipynb)
+#Model was trained on a jupyter notebook. Link to the training can be found [here](https://github.com/Seymour22/Neural-networks/blob/main/Project%201%20Action%20detection%20using%20OpenCV.ipynb)
 
 import cv2
 import numpy as np
